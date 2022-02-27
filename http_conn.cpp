@@ -184,9 +184,20 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char *text)
         m_url += 7;
         m_url = strchr(m_url, '/');
     }
+    if (strncasecmp(m_url, "https://", 8) == 0)
+    {
+        m_url += 8;
+        m_url = strchr(m_url, '/');
+    }
     if (!m_url || m_url[0] != '/')
     {
         return BAD_REQUEST;
+    }
+
+    //
+    if (strlen(m_url) == 1)
+    {
+        strcat(m_url, "index.html");
     }
     m_check_state = CHECK_STATE_HEADER;
     return NO_REQUEST;
@@ -236,6 +247,7 @@ http_conn::HTTP_CODE http_conn::parse_content(char *text)
     if (m_read_idx >= (m_content_length + m_checked_idx))
     {
         text[m_content_length] = '\0';
+        m_string = text;
         return GET_REQUEST;
     }
     return NO_REQUEST;
