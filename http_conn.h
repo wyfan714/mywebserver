@@ -73,6 +73,10 @@ public:
     void process();
     bool read();
     bool write();
+    sockaddr_in *get_address()
+    {
+        return &m_address;
+    }
 
 private:
     void init();

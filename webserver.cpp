@@ -18,13 +18,15 @@
 #include "locker.h"
 #include "threadpool.h"
 #include "http_conn.h"
-
+#include "log.h"
 #define MAX_FD 65536
 #define MAX_EVENT_NUMBER 10000
 
+#define SYNLOG
+#define ASYNLOG
 extern int addfd(int epollfd, int fd, bool one_shot);
 extern int removefd(int epollfd, int fd);
-
+extern int setnonblocking(int fd);
 void addsig(int sig, void (*handler)(int), bool restart = true)
 {
     struct sigaction sa;
@@ -47,9 +49,16 @@ void show_error(int connfd, const char *info)
 
 int main(int argc, char *argv[])
 {
+#ifdef ASYNLOG
+    Log::get_instance()->init("ServerLog", 2000, 800000, 8); //异步日志模型
+#endif
+
+#ifdef SYNLOG
+    Log::get_instance()->init("ServerLog", 2000, 800000, 0); //同步日志模型
+#endif
     if (argc <= 2)
     {
-        printf("usege: %s ip_address port_number\n", basename(argv[0]));
+        printf("usege: %s port_number\n", basename(argv[0]));
         return 1;
     }
     const char *ip = argv[1];
@@ -80,13 +89,17 @@ int main(int argc, char *argv[])
     struct sockaddr_in address;
     bzero(&address, sizeof(address));
     address.sin_family = AF_INET;
+    // address.sin_addr.s_addr = htonl(INADDR_ANY);
     inet_pton(AF_INET, ip, &address.sin_addr);
     address.sin_port = htons(port);
 
+    // int flag = 1;
+    // setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
     ret = bind(listenfd, (struct sockaddr *)&address, sizeof(address));
     assert(ret >= 0);
     ret = listen(listenfd, 5);
     assert(ret >= 0);
+
     epoll_event events[MAX_EVENT_NUMBER];
     int epollfd = epoll_create(5);
     assert(epollfd != -1);
@@ -98,7 +111,7 @@ int main(int argc, char *argv[])
         int number = epoll_wait(epollfd, events, MAX_EVENT_NUMBER, -1);
         if ((number < 0) && (errno != EINTR))
         {
-            printf("epoll failure\n");
+            LOG_ERROR("%s", "epoll failure");
             break;
         }
         for (int i = 0; i < number; i++)
@@ -112,12 +125,13 @@ int main(int argc, char *argv[])
                 int connfd = accept(listenfd, (struct sockaddr *)&client_address, &client_addrlength);
                 if (connfd < 0)
                 {
-                    printf("errno is: %d\n", errno);
+                    LOG_ERROR("%s:errno is: %d", "accept error", errno);
                     continue;
                 }
                 if (http_conn::m_user_count >= MAX_FD)
                 {
                     show_error(connfd, "Internal server busy");
+                    LOG_ERROR("%s", "Internal server busy");
                     continue;
                 }
                 users[connfd].init(connfd, client_address);
@@ -130,6 +144,8 @@ int main(int argc, char *argv[])
             {
                 if (users[sockfd].read())
                 {
+                    LOG_INFO("deal with the client(%s)", inet_ntoa(users[sockfd].get_address()->sin_addr));
+                    Log::get_instance()->flush();
                     pool->append(users + sockfd);
                 }
                 else
@@ -139,7 +155,12 @@ int main(int argc, char *argv[])
             }
             else if (events[i].events & EPOLLOUT)
             {
-                if (!users[sockfd].write())
+                if (users[sockfd].write())
+                {
+                    LOG_INFO("send data to the client(%s)", inet_ntoa(users[sockfd].get_address()->sin_addr));
+                    Log::get_instance()->flush();
+                }
+                else
                 {
                     users[sockfd].close_conn();
                 }

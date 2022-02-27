@@ -344,7 +344,8 @@ bool http_conn::write()
         temp = writev(m_sockfd, m_iv, m_iv_count);
         if (temp <= -1)
         {
-            if (errno != EAGAIN)
+
+            if (errno == EAGAIN)
             {
                 modfd(m_epollfd, m_sockfd, EPOLLOUT);
                 return true;
@@ -366,7 +367,8 @@ bool http_conn::write()
             else
             {
                 modfd(m_epollfd, m_sockfd, EPOLLIN);
-                return false;
+                // return false;
+                return true;
             }
         }
     }
