@@ -11,7 +11,7 @@ const char *error_500_title = "Internal Error";
 const char *error_500_form = "There was an unusual problem serving the requested file.\n";
 
 // !!!
-const char *doc_root = "/home/wyf/myWebServer/static";
+const char *doc_root = "/home/wyf/mywebserver/static";
 
 int setnonblocking(int fd)
 {
@@ -71,6 +71,8 @@ void http_conn::init(int sockfd, const sockaddr_in &addr)
 }
 void http_conn::init()
 {
+    bytes_to_send = 0;
+    bytes_have_send = 0;
     m_check_state = CHECK_STATE_REQUESTLINE;
     m_linger = false;
     m_method = GET;
@@ -313,7 +315,33 @@ http_conn::HTTP_CODE http_conn::do_request()
 {
     strcpy(m_real_file, doc_root);
     int len = strlen(doc_root);
-    strncpy(m_real_file + len, m_url, FILENAME_LEN - len - 1);
+    const char *p = strrchr(m_url, '/');
+    if (*(p + 1) == '0')
+    {
+        char *m_url_real = (char *)malloc(sizeof(char) * 200);
+        strcpy(m_url_real, "/picture.html");
+        strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
+        free(m_url_real);
+    }
+    else if (*(p + 1) == '1')
+    {
+        char *m_url_real = (char *)malloc(sizeof(char) * 200);
+        strcpy(m_url_real, "/video.html");
+        strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
+        free(m_url_real);
+    }
+    else if (*(p + 1) == '2')
+    {
+        char *m_url_real = (char *)malloc(sizeof(char) * 200);
+        strcpy(m_url_real, "/aboutme.html");
+        strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
+        free(m_url_real);
+    }
+    else
+    {
+        strncpy(m_real_file + len, m_url, FILENAME_LEN - len - 1);
+    }
+
     if (stat(m_real_file, &m_file_stat) < 0)
     {
         return NO_RESOURCE;
@@ -343,8 +371,6 @@ void http_conn::unmap()
 bool http_conn::write()
 {
     int temp = 0;
-    int bytes_have_send = 0;
-    int bytes_to_send = m_write_idx;
     if (bytes_to_send == 0)
     {
         modfd(m_epollfd, m_sockfd, EPOLLIN);
@@ -367,22 +393,49 @@ bool http_conn::write()
         }
         bytes_to_send -= temp;
         bytes_have_send += temp;
-        if (bytes_to_send <= bytes_have_send)
+        if (bytes_have_send >= m_iv[0].iov_len)
+        {
+            m_iv[0].iov_len = 0;
+            m_iv[1].iov_base = m_file_address + (bytes_have_send - m_write_idx);
+            m_iv[1].iov_len = bytes_to_send;
+        }
+        else
+        {
+            m_iv[0].iov_base = m_write_buf + bytes_have_send;
+            m_iv[0].iov_len = m_iv[0].iov_len - bytes_have_send;
+        }
+
+        if (bytes_to_send <= 0)
         {
             unmap();
+            modfd(m_epollfd, m_sockfd, EPOLLIN);
+
             if (m_linger)
             {
                 init();
-                modfd(m_epollfd, m_sockfd, EPOLLIN);
                 return true;
             }
             else
             {
-                modfd(m_epollfd, m_sockfd, EPOLLIN);
-                // return false;
-                return true;
+                return false;
             }
         }
+        // if (bytes_to_send <= bytes_have_send)
+        // {
+        //     unmap();
+        //     if (m_linger)
+        //     {
+        //         init();
+        //         modfd(m_epollfd, m_sockfd, EPOLLIN);
+        //         return true;
+        //     }
+        //     else
+        //     {
+        //         modfd(m_epollfd, m_sockfd, EPOLLIN);
+        //         // return false;
+        //         return true;
+        //     }
+        // }
     }
 }
 // dont clear
@@ -487,6 +540,7 @@ bool http_conn::process_write(HTTP_CODE ret)
             m_iv[1].iov_base = m_file_address;
             m_iv[1].iov_len = m_file_stat.st_size;
             m_iv_count = 2;
+            bytes_to_send = m_write_idx + m_file_stat.st_size;
             return true;
         }
         else
@@ -508,6 +562,7 @@ bool http_conn::process_write(HTTP_CODE ret)
     m_iv[0].iov_base = m_write_buf;
     m_iv[0].iov_len = m_write_idx;
     m_iv_count = 1;
+    bytes_to_send = m_write_idx;
     return true;
 }
 

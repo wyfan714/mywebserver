@@ -128,6 +128,8 @@ private:
     int m_iv_count;
 
     char *m_string; //存储请求头数据
+    int bytes_to_send;
+    int bytes_have_send;
 };
 
 #endif
