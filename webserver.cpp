@@ -90,7 +90,7 @@ int main(int argc, char *argv[])
 #endif
     if (argc <= 2)
     {
-        printf("usege: %s port_number\n", basename(argv[0]));
+        printf("usege: %s address port_number\n", basename(argv[0]));
         return 1;
     }
     const char *ip = argv[1];
