@@ -18,13 +18,13 @@
 #include "locker.h"
 #include "threadpool.h"
 #include "http_conn.h"
-#include "lst_timer.h"
-// #include "time_wheel.h"
+// #include "lst_timer.h"
+#include "time_wheel.h"
 #include "log.h"
 #include "config.h"
 #define MAX_FD 65536
 #define MAX_EVENT_NUMBER 10000
-#define TIMESLOT 5
+#define TIMESLOT 10
 
 extern int addfd(int epollfd, int fd, bool one_shot, int LISTENTYPE, int CONNTYPE);
 extern int removefd(int epollfd, int fd);
@@ -32,7 +32,8 @@ extern int setnonblocking(int fd);
 
 // 定时器相关参数
 static int pipefd[2];
-static sort_timer_lst timer_lst;
+// static sort_timer_lst timer_lst;
+static time_wheel tw_wheel;
 static int epollfd = 0;
 
 void sig_handler(int sig)
@@ -45,7 +46,8 @@ void sig_handler(int sig)
 
 void timer_handler()
 {
-    timer_lst.tick();
+    // timer_lst.tick();
+    tw_wheel.tick();
     alarm(TIMESLOT);
 }
 
@@ -183,13 +185,15 @@ int main(int argc, char *argv[])
 
                     users_timer[connfd].address = client_address;
                     users_timer[connfd].sockfd = connfd;
-                    util_timer *timer = new util_timer;
+                    // util_timer *timer = new util_timer;
+
+                    tw_timer *timer = tw_wheel.add_timer(TIMESLOT * 6);
                     timer->user_data = &users_timer[connfd];
                     timer->cb_func = cb_func;
-                    time_t cur = time(NULL);
-                    timer->expire = cur + 3 * TIMESLOT;
+                    // time_t cur = time(NULL);
+                    // timer->expire = cur + 3 * TIMESLOT;
                     users_timer[connfd].timer = timer;
-                    timer_lst.add_timer(timer);
+                    // timer_lst.add_timer(timer);
                 }
                 else
                 {
@@ -212,23 +216,26 @@ int main(int argc, char *argv[])
 
                         users_timer[connfd].address = client_address;
                         users_timer[connfd].sockfd = connfd;
-                        util_timer *timer = new util_timer;
+                        // util_timer *timer = new util_timer;
+                        tw_timer *timer = tw_wheel.add_timer(TIMESLOT * 6);
                         timer->user_data = &users_timer[connfd];
                         timer->cb_func = cb_func;
-                        time_t cur = time(NULL);
-                        timer->expire = cur + 3 * TIMESLOT;
+                        // time_t cur = time(NULL);
+                        // timer->expire = cur + 3 * TIMESLOT;
                         users_timer[connfd].timer = timer;
-                        timer_lst.add_timer(timer);
+                        // timer_lst.add_timer(timer);
                     }
                 }
             }
             else if (events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR))
             {
-                util_timer *timer = users_timer[sockfd].timer;
+                // util_timer *timer = users_timer[sockfd].timer;
+                tw_timer *timer = users_timer[sockfd].timer;
                 timer->cb_func(&users_timer[sockfd]);
                 if (timer)
                 {
-                    timer_lst.del_timer(timer);
+                    // timer_lst.del_timer(timer);
+                    tw_wheel.del_timer(timer);
                 }
             }
             // deal signal
@@ -266,7 +273,8 @@ int main(int argc, char *argv[])
             }
             else if (events[i].events & EPOLLIN)
             {
-                util_timer *timer = users_timer[sockfd].timer;
+                // util_timer *timer = users_timer[sockfd].timer;
+                tw_timer *timer = users_timer[sockfd].timer;
                 if (users[sockfd].read())
                 {
                     LOG_INFO("deal with the client(%s)", inet_ntoa(users[sockfd].get_address()->sin_addr));
@@ -274,11 +282,13 @@ int main(int argc, char *argv[])
                     pool->append(users + sockfd);
                     if (timer)
                     {
-                        time_t cur = time(NULL);
-                        timer->expire = cur + 3 * TIMESLOT;
+                        // time_t cur = time(NULL);
+                        // timer->expire = cur + 3 * TIMESLOT;
+                        // 时间轮圈数+1
+                        timer->rotation = timer->rotation + 1;
                         LOG_INFO("%s", "adjust timer once");
                         Log::get_instance()->flush();
-                        timer_lst.adjust_timer(timer);
+                        // timer_lst.adjust_timer(timer);
                     }
                 }
                 else
@@ -286,24 +296,27 @@ int main(int argc, char *argv[])
                     timer->cb_func(&users_timer[sockfd]);
                     if (timer)
                     {
-                        timer_lst.del_timer(timer);
+                        // timer_lst.del_timer(timer);
+                        tw_wheel.del_timer(timer);
                     }
                 }
             }
             else if (events[i].events & EPOLLOUT)
             {
-                util_timer *timer = users_timer[sockfd].timer;
+                // util_timer *timer = users_timer[sockfd].timer;
+                tw_timer *timer = users_timer[sockfd].timer;
                 if (users[sockfd].write())
                 {
                     LOG_INFO("send data to the client(%s)", inet_ntoa(users[sockfd].get_address()->sin_addr));
                     Log::get_instance()->flush();
                     if (timer)
                     {
-                        time_t cur = time(NULL);
-                        timer->expire = cur + 3 * TIMESLOT;
+                        // time_t cur = time(NULL);
+                        // timer->expire = cur + 3 * TIMESLOT;
+                        timer->rotation = timer->rotation + 1;
                         LOG_INFO("%s", "adjust timer once");
                         Log::get_instance()->flush();
-                        timer_lst.adjust_timer(timer);
+                        // timer_lst.adjust_timer(timer);
                     }
                 }
                 else
@@ -311,7 +324,8 @@ int main(int argc, char *argv[])
                     timer->cb_func(&users_timer[sockfd]);
                     if (timer)
                     {
-                        timer_lst.del_timer(timer);
+                        // timer_lst.del_timer(timer);
+                        tw_wheel.del_timer(timer);
                     }
                     // users[sockfd].close_conn();
                 }

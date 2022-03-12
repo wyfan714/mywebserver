@@ -18,7 +18,7 @@
 * 启动webserver
 
     ```C++
-    ./webserver localhost port
+    ./webserver 
     ```
 
 * 浏览器端

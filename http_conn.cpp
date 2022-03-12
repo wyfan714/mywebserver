@@ -275,7 +275,7 @@ http_conn::HTTP_CODE http_conn::parse_headers(char *text)
     }
     else
     {
-        printf("oop! unknow head %s\n", text);
+        // printf("oop! unknow head %s\n", text);
     }
     return NO_REQUEST;
 }
@@ -301,7 +301,7 @@ http_conn::HTTP_CODE http_conn::process_read()
     {
         text = get_line();
         m_start_line = m_checked_idx;
-        printf("got 1 http line:%s\n", text);
+        // printf("got 1 http line:%s\n", text);
         switch (m_check_state)
         {
         case CHECK_STATE_REQUESTLINE:

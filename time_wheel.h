@@ -25,8 +25,8 @@ public:
     }
 
 public:
-    int rotation;
-    int time_slot;
+    int rotation;  // 定时器在时间轮转多少圈后生效
+    int time_slot; // 记录定时器对应哪个槽
     void (*cb_func)(client_data *);
     client_data *user_data;
     tw_timer *next;
@@ -45,6 +45,7 @@ public:
     }
     ~time_wheel()
     {
+        // 遍历每个槽
         for (int i = 0; i < N; ++i)
         {
             tw_timer *tmp = slots[i];
@@ -74,9 +75,10 @@ public:
         int rotation = ticks / N;
         int ts = (cur_slot + (ticks % N)) % N;
         tw_timer *timer = new tw_timer(rotation, ts);
+        // 第ts个槽中无定时器,插入头节点
         if (!slots[ts])
         {
-            printf("add timer, rotation is %d, ts is %d, cur_slot is %d\n");
+            printf("add timer, rotation is %d, ts is %d, cur_slot is %d\n", rotation, ts, cur_slot);
             slots[ts] = timer;
         }
         else
@@ -156,8 +158,10 @@ public:
     }
 
 private:
+    // 时间轮上槽的数目
     static const int N = 60;
-    static const int SI = 1;
+    // 每SI秒时间轮转动一次
+    static const int SI = 10;
     tw_timer *slots[N];
     int cur_slot;
 };
