@@ -66,7 +66,7 @@ public:
             {
                 array[i] = init_array[i];
             }
-            for (int i = (cur_size) / 2; i >= 0; --i)
+            for (int i = (cur_size - 1) / 2; i >= 0; --i)
             {
                 percolate_down(i);
             }
@@ -142,7 +142,7 @@ public:
     {
         heap_timer *tmp = array[0];
         time_t cur = time(NULL);
-        while (!empty)
+        while (!empty())
         {
             if (!tmp)
             {
