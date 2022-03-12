@@ -21,12 +21,11 @@
 #include "lst_timer.h"
 // #include "time_wheel.h"
 #include "log.h"
+#include "config.h"
 #define MAX_FD 65536
 #define MAX_EVENT_NUMBER 10000
 #define TIMESLOT 5
 
-#define SYNLOG
-// #define ASYNLOG
 extern int addfd(int epollfd, int fd, bool one_shot);
 extern int removefd(int epollfd, int fd);
 extern int setnonblocking(int fd);
@@ -81,20 +80,20 @@ void show_error(int connfd, const char *info)
 
 int main(int argc, char *argv[])
 {
-#ifdef ASYNLOG
-    Log::get_instance()->init("ServerLog", 2000, 800000, 8); //异步日志模型
-#endif
-
-#ifdef SYNLOG
-    Log::get_instance()->init("ServerLog", 2000, 800000, 0); //同步日志模型
-#endif
-    if (argc <= 2)
+    Config config;
+    config.parse_args(argc, argv);
+    if (config.LOGTYPE == 0)
     {
-        printf("usege: %s address port_number\n", basename(argv[0]));
-        return 1;
+        //同步日志模型
+        Log::get_instance()->init("ServerLog", 2000, 800000, 0);
     }
-    const char *ip = argv[1];
-    int port = atoi(argv[2]);
+    else
+    {
+        //异步日志模型
+        Log::get_instance()->init("ServerLog", 2000, 800000, 800);
+    }
+
+    int port = config.PORT;
 
     addsig(SIGPIPE, SIG_IGN);
 
@@ -121,12 +120,12 @@ int main(int argc, char *argv[])
     struct sockaddr_in address;
     bzero(&address, sizeof(address));
     address.sin_family = AF_INET;
-    // address.sin_addr.s_addr = htonl(INADDR_ANY);
-    inet_pton(AF_INET, ip, &address.sin_addr);
+    address.sin_addr.s_addr = htonl(INADDR_ANY);
+    // inet_pton(AF_INET, ip, &address.sin_addr);
     address.sin_port = htons(port);
 
-    // int flag = 1;
-    // setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
+    int flag = 1;
+    setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
     ret = bind(listenfd, (struct sockaddr *)&address, sizeof(address));
     assert(ret >= 0);
     ret = listen(listenfd, 5);
@@ -165,29 +164,63 @@ int main(int argc, char *argv[])
 
                 struct sockaddr_in client_address;
                 socklen_t client_addrlength = sizeof(client_address);
-                int connfd = accept(listenfd, (struct sockaddr *)&client_address, &client_addrlength);
-                if (connfd < 0)
+                if (config.LISTENTYPE == 0)
                 {
-                    LOG_ERROR("%s:errno is: %d", "accept error", errno);
-                    continue;
-                }
-                if (http_conn::m_user_count >= MAX_FD)
-                {
-                    show_error(connfd, "Internal server busy");
-                    LOG_ERROR("%s", "Internal server busy");
-                    continue;
-                }
-                users[connfd].init(connfd, client_address);
+                    // listenfd LT
+                    int connfd = accept(listenfd, (struct sockaddr *)&client_address, &client_addrlength);
+                    if (connfd < 0)
+                    {
+                        LOG_ERROR("%s:errno is: %d", "accept error", errno);
+                        continue;
+                    }
+                    if (http_conn::m_user_count >= MAX_FD)
+                    {
+                        show_error(connfd, "Internal server busy");
+                        LOG_ERROR("%s", "Internal server busy");
+                        continue;
+                    }
+                    users[connfd].init(connfd, client_address);
 
-                users_timer[connfd].address = client_address;
-                users_timer[connfd].sockfd = connfd;
-                util_timer *timer = new util_timer;
-                timer->user_data = &users_timer[connfd];
-                timer->cb_func = cb_func;
-                time_t cur = time(NULL);
-                timer->expire = cur + 3 * TIMESLOT;
-                users_timer[connfd].timer = timer;
-                timer_lst.add_timer(timer);
+                    users_timer[connfd].address = client_address;
+                    users_timer[connfd].sockfd = connfd;
+                    util_timer *timer = new util_timer;
+                    timer->user_data = &users_timer[connfd];
+                    timer->cb_func = cb_func;
+                    time_t cur = time(NULL);
+                    timer->expire = cur + 3 * TIMESLOT;
+                    users_timer[connfd].timer = timer;
+                    timer_lst.add_timer(timer);
+                }
+                else
+                {
+                    // listenfd ET
+                    while (1)
+                    {
+                        int connfd = accept(listenfd, (struct sockaddr *)&client_address, &client_addrlength);
+                        if (connfd < 0)
+                        {
+                            LOG_ERROR("%s:errno is: %d", "accept error", errno);
+                            continue;
+                        }
+                        if (http_conn::m_user_count >= MAX_FD)
+                        {
+                            show_error(connfd, "Internal server busy");
+                            LOG_ERROR("%s", "Internal server busy");
+                            continue;
+                        }
+                        users[connfd].init(connfd, client_address);
+
+                        users_timer[connfd].address = client_address;
+                        users_timer[connfd].sockfd = connfd;
+                        util_timer *timer = new util_timer;
+                        timer->user_data = &users_timer[connfd];
+                        timer->cb_func = cb_func;
+                        time_t cur = time(NULL);
+                        timer->expire = cur + 3 * TIMESLOT;
+                        users_timer[connfd].timer = timer;
+                        timer_lst.add_timer(timer);
+                    }
+                }
             }
             else if (events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR))
             {
@@ -197,8 +230,6 @@ int main(int argc, char *argv[])
                 {
                     timer_lst.del_timer(timer);
                 }
-                // ?
-                // users[sockfd].close_conn();
             }
             // deal signal
             else if ((sockfd == pipefd[0]) && (events[i].events & EPOLLIN))
@@ -257,7 +288,6 @@ int main(int argc, char *argv[])
                     {
                         timer_lst.del_timer(timer);
                     }
-                    // users[sockfd].close_conn();
                 }
             }
             else if (events[i].events & EPOLLOUT)
