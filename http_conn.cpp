@@ -21,11 +21,26 @@ int setnonblocking(int fd)
     return old_version;
 }
 
-void addfd(int epollfd, int fd, bool one_shot)
+void addfd(int epollfd, int fd, bool one_shot, int LISTENTYPE, int CONNTYPE)
 {
     epoll_event event;
     event.data.fd = fd;
-    event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+    if (CONNTYPE == 0)
+    {
+        event.events = EPOLLIN | EPOLLRDHUP;
+    }
+    else
+    {
+        event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+    }
+    if (LISTENTYPE == 0)
+    {
+        event.events = EPOLLIN | EPOLLRDHUP;
+    }
+    else
+    {
+        event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+    }
     if (one_shot)
     {
         event.events |= EPOLLONESHOT;
@@ -39,11 +54,18 @@ void removefd(int epollfd, int fd)
     close(fd);
 }
 
-void modfd(int epollfd, int fd, int ev)
+void modfd(int epollfd, int fd, int ev, int CONNTYPE)
 {
     epoll_event event;
     event.data.fd = fd;
-    event.events = ev | EPOLLET | EPOLLONESHOT | EPOLLRDHUP;
+    if (CONNTYPE == 0)
+    {
+        event.events = ev | EPOLLONESHOT | EPOLLRDHUP;
+    }
+    else
+    {
+        event.events = ev | EPOLLET | EPOLLONESHOT | EPOLLRDHUP;
+    }
     epoll_ctl(epollfd, EPOLL_CTL_MOD, fd, &event);
 }
 
@@ -58,15 +80,17 @@ void http_conn::close_conn(bool real_close)
         m_user_count--;
     }
 }
-void http_conn::init(int sockfd, const sockaddr_in &addr)
+void http_conn::init(int sockfd, const sockaddr_in &addr, int LISTENTYPE, int CONNTYPE)
 {
     m_sockfd = sockfd;
     m_address = addr;
     // debug use
     // int reuse = 1;
     // setsockopt(m_sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
-    addfd(m_epollfd, sockfd, true);
+    addfd(m_epollfd, sockfd, true, LISTENTYPE, CONNTYPE);
     m_user_count++;
+    m_listenType = LISTENTYPE;
+    m_connfdType = CONNTYPE;
     init();
 }
 void http_conn::init()
@@ -130,24 +154,36 @@ bool http_conn::read()
         return false;
     }
     int bytes_read = 0;
-    while (1)
+    if (m_connfdType == 0)
     {
         bytes_read = recv(m_sockfd, m_read_buf + m_read_idx, READ_BUFFER_SIZE - m_read_idx, 0);
-        if (bytes_read == -1)
-        {
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-            {
-                break;
-            }
-            return false;
-        }
-        else if (bytes_read == 0)
-        {
-            return false;
-        }
         m_read_idx += bytes_read;
+        if (bytes_read <= 0)
+        {
+            return false;
+        }
     }
-    return true;
+    else
+    {
+        while (1)
+        {
+            bytes_read = recv(m_sockfd, m_read_buf + m_read_idx, READ_BUFFER_SIZE - m_read_idx, 0);
+            if (bytes_read == -1)
+            {
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                {
+                    break;
+                }
+                return false;
+            }
+            else if (bytes_read == 0)
+            {
+                return false;
+            }
+            m_read_idx += bytes_read;
+        }
+        return true;
+    }
 }
 
 http_conn::HTTP_CODE http_conn::parse_request_line(char *text)
@@ -373,7 +409,7 @@ bool http_conn::write()
     int temp = 0;
     if (bytes_to_send == 0)
     {
-        modfd(m_epollfd, m_sockfd, EPOLLIN);
+        modfd(m_epollfd, m_sockfd, EPOLLIN, m_connfdType);
         init();
         return true;
     }
@@ -385,7 +421,7 @@ bool http_conn::write()
 
             if (errno == EAGAIN)
             {
-                modfd(m_epollfd, m_sockfd, EPOLLOUT);
+                modfd(m_epollfd, m_sockfd, EPOLLOUT, m_connfdType);
                 return true;
             }
             unmap();
@@ -408,7 +444,7 @@ bool http_conn::write()
         if (bytes_to_send <= 0)
         {
             unmap();
-            modfd(m_epollfd, m_sockfd, EPOLLIN);
+            modfd(m_epollfd, m_sockfd, EPOLLIN, m_connfdType);
 
             if (m_linger)
             {
@@ -571,7 +607,7 @@ void http_conn::process()
     HTTP_CODE read_ret = process_read();
     if (read_ret == NO_REQUEST)
     {
-        modfd(m_epollfd, m_sockfd, EPOLLIN);
+        modfd(m_epollfd, m_sockfd, EPOLLIN, m_connfdType);
         return;
     }
     bool write_ret = process_write(read_ret);
@@ -579,5 +615,5 @@ void http_conn::process()
     {
         close_conn();
     }
-    modfd(m_epollfd, m_sockfd, EPOLLOUT);
+    modfd(m_epollfd, m_sockfd, EPOLLOUT, m_connfdType);
 }

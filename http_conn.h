@@ -68,7 +68,7 @@ public:
     ~http_conn() {}
 
 public:
-    void init(int sockfd, const sockaddr_in &addr);
+    void init(int sockfd, const sockaddr_in &addr, int LISTENTYPE, int CONNTYPE);
     void close_conn(bool read_close = true);
     void process();
     bool read();
@@ -130,6 +130,9 @@ private:
     char *m_string; //存储请求头数据
     int bytes_to_send;
     int bytes_have_send;
+
+    int m_listenType;
+    int m_connfdType;
 };
 
 #endif

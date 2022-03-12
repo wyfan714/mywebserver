@@ -26,7 +26,7 @@
 #define MAX_EVENT_NUMBER 10000
 #define TIMESLOT 5
 
-extern int addfd(int epollfd, int fd, bool one_shot);
+extern int addfd(int epollfd, int fd, bool one_shot, int LISTENTYPE, int CONNTYPE);
 extern int removefd(int epollfd, int fd);
 extern int setnonblocking(int fd);
 
@@ -134,13 +134,13 @@ int main(int argc, char *argv[])
     epoll_event events[MAX_EVENT_NUMBER];
     epollfd = epoll_create(5);
     assert(epollfd != -1);
-    addfd(epollfd, listenfd, false);
+    addfd(epollfd, listenfd, false, config.LISTENTYPE, config.CONNTYPE);
     http_conn::m_epollfd = epollfd;
 
     ret = socketpair(PF_UNIX, SOCK_STREAM, 0, pipefd);
     assert(ret != -1);
     setnonblocking(pipefd[1]);
-    addfd(epollfd, pipefd[0], false);
+    addfd(epollfd, pipefd[0], false, config.LISTENTYPE, config.CONNTYPE);
     addsig(SIGALRM, sig_handler, false);
     addsig(SIGTERM, sig_handler, false);
     bool stop_server = false;
@@ -179,7 +179,7 @@ int main(int argc, char *argv[])
                         LOG_ERROR("%s", "Internal server busy");
                         continue;
                     }
-                    users[connfd].init(connfd, client_address);
+                    users[connfd].init(connfd, client_address, config.LISTENTYPE, config.CONNTYPE);
 
                     users_timer[connfd].address = client_address;
                     users_timer[connfd].sockfd = connfd;
@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
                             LOG_ERROR("%s", "Internal server busy");
                             continue;
                         }
-                        users[connfd].init(connfd, client_address);
+                        users[connfd].init(connfd, client_address, config.LISTENTYPE, config.CONNTYPE);
 
                         users_timer[connfd].address = client_address;
                         users_timer[connfd].sockfd = connfd;
