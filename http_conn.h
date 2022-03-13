@@ -133,6 +133,7 @@ private:
 
     int m_listenType;
     int m_connfdType;
+    int is_post;
 };
 
 #endif

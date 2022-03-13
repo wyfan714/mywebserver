@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+
+2022_*
+webserver
+

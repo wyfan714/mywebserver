@@ -108,6 +108,7 @@ void http_conn::init()
     m_checked_idx = 0;
     m_read_idx = 0;
     m_write_idx = 0;
+    is_post = 0;
     memset(m_read_buf, '\0', READ_BUFFER_SIZE);
     memset(m_write_buf, '\0', WRITE_BUFFER_SIZE);
     memset(m_real_file, '\0', FILENAME_LEN);
@@ -199,6 +200,11 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char *text)
     if (strcasecmp(method, "GET") == 0)
     {
         m_method = GET;
+    }
+    else if (strcasecmp(method, "POST") == 0)
+    {
+        m_method = POST;
+        is_post = 1;
     }
     else
     {
@@ -354,6 +360,11 @@ http_conn::HTTP_CODE http_conn::do_request()
     strcpy(m_real_file, doc_root);
     int len = strlen(doc_root);
     const char *p = strrchr(m_url, '/');
+    if (is_post)
+    {
+        // post请求
+        // do something
+    }
     if (*(p + 1) == '0')
     {
         char *m_url_real = (char *)malloc(sizeof(char) * 200);
