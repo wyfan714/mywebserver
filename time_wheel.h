@@ -5,6 +5,7 @@
 #include <time.h>
 #include <netinet/in.h>
 #include <stdio.h>
+#include "log.h"
 #define BUFFER_SIZE 64
 
 class tw_timer;
@@ -78,7 +79,7 @@ public:
         // 第ts个槽中无定时器,插入头节点
         if (!slots[ts])
         {
-            printf("add timer, rotation is %d, ts is %d, cur_slot is %d\n", rotation, ts, cur_slot);
+            LOG_INFO("add timer, rotation is %d, ts is %d, cur_slot is %d", rotation, ts, cur_slot);
             slots[ts] = timer;
         }
         else
@@ -118,10 +119,10 @@ public:
     void tick()
     {
         tw_timer *tmp = slots[cur_slot];
-        printf("current slot is %d\n", cur_slot);
+        LOG_INFO("current slot is %d", cur_slot);
         while (tmp)
         {
-            printf("tick the timer once\n");
+            LOG_INFO("tick the timer once");
             if (tmp->rotation > 0)
             {
                 tmp->rotation--;
@@ -132,7 +133,7 @@ public:
                 tmp->cb_func(tmp->user_data);
                 if (tmp == slots[cur_slot])
                 {
-                    printf("delete header in cur_slot\n");
+                    LOG_INFO("delete header in cur_slot");
                     slots[cur_slot] = tmp->next;
                     delete tmp;
                     if (slots[cur_slot])

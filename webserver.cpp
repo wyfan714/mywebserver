@@ -31,7 +31,7 @@ extern int removefd(int epollfd, int fd);
 extern int setnonblocking(int fd);
 
 // 定时器相关参数
-static int pipefd[2];
+static int pipefd[2]; // 用于接收信号
 // static sort_timer_lst timer_lst;
 static time_wheel tw_wheel;
 static int epollfd = 0;
@@ -115,7 +115,6 @@ int main(int argc, char *argv[])
     // 预先为每个可能的客户连接分配一个http_conn对象
     http_conn *users = new http_conn[MAX_FD];
     assert(users);
-    int user_count = 0;
 
     int listenfd = socket(PF_INET, SOCK_STREAM, 0);
     assert(listenfd >= 0);
@@ -194,7 +193,7 @@ int main(int argc, char *argv[])
                     users_timer[connfd].address = client_address;
                     users_timer[connfd].sockfd = connfd;
                     // util_timer *timer = new util_timer;
-                    tw_timer *timer = tw_wheel.add_timer(TIMESLOT * 6);
+                    tw_timer *timer = tw_wheel.add_timer(TIMESLOT * 3);
                     timer->user_data = &users_timer[connfd];
                     timer->cb_func = cb_func;
                     // time_t cur = time(NULL);
@@ -224,7 +223,7 @@ int main(int argc, char *argv[])
                         users_timer[connfd].address = client_address;
                         users_timer[connfd].sockfd = connfd;
                         // util_timer *timer = new util_timer;
-                        tw_timer *timer = tw_wheel.add_timer(TIMESLOT * 6);
+                        tw_timer *timer = tw_wheel.add_timer(TIMESLOT * 3);
                         timer->user_data = &users_timer[connfd];
                         timer->cb_func = cb_func;
                         // time_t cur = time(NULL);
