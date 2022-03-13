@@ -42,17 +42,17 @@ private:
     }
 
 private:
-    char dir_name[128]; // 路径名
-    char log_name[128]; // 文件名
-    int m_split_lines;  // 日志最大行数
-    int m_log_buf_size; // 日志缓冲区大小
-    long long m_count;  // 日志总行数
-    int m_today;        // 记录当前时间是哪一天
-    FILE *m_fp;         // 打开日志文件的文件指针
-    char *m_buf;
+    char dir_name[128];               // 路径名
+    char log_name[128];               // 文件名
+    int m_split_lines;                // 日志最大行数
+    int m_log_buf_size;               // 日志缓冲区大小
+    long long m_count;                // 日志总行数
+    int m_today;                      // 记录当前时间是哪一天
+    FILE *m_fp;                       // 打开日志文件的文件指针
+    char *m_buf;                      // 日志缓冲区
     block_queue<string> *m_log_queue; // 阻塞队列
     bool m_is_async;                  // 同步日志模式还是异步日志模式
-    locker m_mutex;
+    locker m_mutex;                   // 日志写入时的互斥锁
 };
 
 #define LOG_DEBUG(format, ...) Log::get_instance()->write_log(0, format, ##__VA_ARGS__)

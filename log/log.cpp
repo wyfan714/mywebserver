@@ -133,6 +133,6 @@ void Log::write_log(int level, const char *format, ...)
 void Log::flush(void)
 {
     m_mutex.lock();
-    fflush(m_fp);
+    fflush(m_fp); // 刷新缓冲区
     m_mutex.unlock();
 }
