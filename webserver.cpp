@@ -22,9 +22,9 @@
 #include "time_wheel.h"
 #include "log.h"
 #include "config.h"
-#define MAX_FD 65536
-#define MAX_EVENT_NUMBER 10000
-#define TIMESLOT 10
+#define MAX_FD 65536           // 最大文件描述符
+#define MAX_EVENT_NUMBER 10000 // 最大事件数
+#define TIMESLOT 10            // 最小超时单位
 
 extern int addfd(int epollfd, int fd, bool one_shot, int LISTENTYPE, int CONNTYPE);
 extern int removefd(int epollfd, int fd);
@@ -38,6 +38,7 @@ static int epollfd = 0;
 
 void sig_handler(int sig)
 {
+    // 保留原来的errno,在函数最后恢复,以保证函数的可重入性
     int save_errno = errno;
     int msg = sig;
     send(pipefd[1], (char *)&msg, 1, 0);
@@ -97,8 +98,10 @@ int main(int argc, char *argv[])
 
     int port = config.PORT;
 
+    // 忽略SITPIPE信号
     addsig(SIGPIPE, SIG_IGN);
 
+    // 创建线程池
     threadpool<http_conn> *pool = NULL;
     try
     {
@@ -108,6 +111,8 @@ int main(int argc, char *argv[])
     {
         return 1;
     }
+
+    // 预先为每个可能的客户连接分配一个http_conn对象
     http_conn *users = new http_conn[MAX_FD];
     assert(users);
     int user_count = 0;
@@ -115,6 +120,7 @@ int main(int argc, char *argv[])
     int listenfd = socket(PF_INET, SOCK_STREAM, 0);
     assert(listenfd >= 0);
 
+    // 有数据待发送, 则延迟关闭
     struct linger tmp = {1, 0};
     setsockopt(listenfd, SOL_SOCKET, SO_LINGER, &tmp, sizeof(tmp));
 
@@ -136,6 +142,7 @@ int main(int argc, char *argv[])
     epoll_event events[MAX_EVENT_NUMBER];
     epollfd = epoll_create(5);
     assert(epollfd != -1);
+    // 监听连接
     addfd(epollfd, listenfd, false, config.LISTENTYPE, config.CONNTYPE);
     http_conn::m_epollfd = epollfd;
 
@@ -148,6 +155,7 @@ int main(int argc, char *argv[])
     bool stop_server = false;
     client_data *users_timer = new client_data[MAX_FD];
     bool timeout = false;
+    // 定时
     alarm(TIMESLOT);
 
     while (!stop_server)
@@ -186,7 +194,6 @@ int main(int argc, char *argv[])
                     users_timer[connfd].address = client_address;
                     users_timer[connfd].sockfd = connfd;
                     // util_timer *timer = new util_timer;
-
                     tw_timer *timer = tw_wheel.add_timer(TIMESLOT * 6);
                     timer->user_data = &users_timer[connfd];
                     timer->cb_func = cb_func;
@@ -229,6 +236,7 @@ int main(int argc, char *argv[])
             }
             else if (events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR))
             {
+                // 客户端关闭连接, 移除对应的定时器
                 // util_timer *timer = users_timer[sockfd].timer;
                 tw_timer *timer = users_timer[sockfd].timer;
                 timer->cb_func(&users_timer[sockfd]);
@@ -238,9 +246,9 @@ int main(int argc, char *argv[])
                     tw_wheel.del_timer(timer);
                 }
             }
-            // deal signal
             else if ((sockfd == pipefd[0]) && (events[i].events & EPOLLIN))
             {
+                // 处理信号
                 int sig;
                 char signals[1024];
                 ret = recv(pipefd[0], signals, sizeof(signals), 0);
@@ -273,6 +281,7 @@ int main(int argc, char *argv[])
             }
             else if (events[i].events & EPOLLIN)
             {
+                // 处理从客户连接上收到的数据
                 // util_timer *timer = users_timer[sockfd].timer;
                 tw_timer *timer = users_timer[sockfd].timer;
                 if (users[sockfd].read())
@@ -313,6 +322,7 @@ int main(int argc, char *argv[])
                     {
                         // time_t cur = time(NULL);
                         // timer->expire = cur + 3 * TIMESLOT;
+                        // 时间轮圈数+1
                         timer->rotation = timer->rotation + 1;
                         LOG_INFO("%s", "adjust timer once");
                         Log::get_instance()->flush();

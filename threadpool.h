@@ -21,12 +21,12 @@ private:
     void run();
 
 private:
-    int m_thread_number;
-    int m_max_requests;
-    pthread_t *m_threads;
-    std::list<T *> m_workqueue;
-    locker m_queuelocker;
-    sem m_queuestat;
+    int m_thread_number;        // 线程数
+    int m_max_requests;         // 请求队列最大请求数
+    pthread_t *m_threads;       // 线程池数组
+    std::list<T *> m_workqueue; // 请求队列
+    locker m_queuelocker;       // 请求队列的互斥锁
+    sem m_queuestat;            // 是否有任务需要处理
     bool m_stop;
 };
 

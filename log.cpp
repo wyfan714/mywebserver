@@ -21,6 +21,7 @@ Log::~Log()
 
 bool Log::init(const char *file_name, int log_buf_size, int split_lines, int max_queue_size)
 {
+    // 如果设置了max_queue_size,则是异步模式,因为只有异步需要阻塞队列
     if (max_queue_size >= 1)
     {
         m_is_async = true;
@@ -74,8 +75,10 @@ void Log::write_log(int level, const char *format, ...)
         break;
     case 2:
         strcpy(s, "[warn]:");
+        break;
     case 3:
         strcpy(s, "[error]:");
+        break;
     default:
         strcpy(s, "[info]:");
         break;
