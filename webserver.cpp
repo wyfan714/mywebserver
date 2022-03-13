@@ -15,13 +15,13 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 
-#include "locker.h"
+#include "log/locker.h"
 #include "threadpool.h"
-#include "http_conn.h"
-// #include "lst_timer.h"
-#include "time_wheel.h"
-#include "log.h"
-#include "config.h"
+#include "http/http_conn.h"
+// #include "timer/lst_timer.h"
+#include "timer/time_wheel.h"
+#include "log/log.h"
+#include "config/config.h"
 #define MAX_FD 65536           // 最大文件描述符
 #define MAX_EVENT_NUMBER 10000 // 最大事件数
 #define TIMESLOT 10            // 最小超时单位

@@ -1,3 +1,3 @@
 #! /bin/bash
 
-g++ webserver.cpp config.cpp http_conn.cpp log.cpp -o webserver -pthread
+g++ webserver.cpp config/config.cpp http/http_conn.cpp log/log.cpp -o webserver -pthread
