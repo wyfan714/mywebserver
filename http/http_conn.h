@@ -21,6 +21,7 @@
 #include <pthread.h>
 #include <sys/uio.h>
 #include "../log/locker.h"
+#include "../mysql/sql_connection_pool.h"
 
 class http_conn
 {

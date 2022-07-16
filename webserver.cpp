@@ -36,6 +36,12 @@ static int pipefd[2]; // 用于接收信号
 static time_wheel tw_wheel;
 static int epollfd = 0;
 
+connectionPool *connPool;
+string user;
+string passWord;
+string dataBaseName;
+int sqlCount;
+
 void sig_handler(int sig)
 {
     // 保留原来的errno,在函数最后恢复,以保证函数的可重入性
@@ -101,6 +107,9 @@ int main(int argc, char *argv[])
     // 忽略SITPIPE信号
     addsig(SIGPIPE, SIG_IGN);
 
+    // 创建数据库连接池
+    // connPool = connectionPool::getInstance();
+    //  connPool->init("localhost", user, passWord, dataBaseName, 3306, sqlCount, true);
     // 创建线程池
     threadpool<http_conn> *pool = NULL;
     try
