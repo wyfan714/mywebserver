@@ -331,24 +331,24 @@ void WebServer::deal_with_read(int sockfd)
     // reactor
     if (actor_model == 1)
     {
-        // if (timer)
-        // {
-        //     adjust_timer(timer);
-        // }
+        if (timer)
+        {
+            adjust_timer(timer);
+        }
 
         //若监测到读事件，将该事件放入请求队列
         thd_pool->append_with_state(users + sockfd, false);
 
         while (true)
         {
-            if (1 == users[sockfd].improv)
+            if (users[sockfd].is_done)
             {
-                if (1 == users[sockfd].timer_flag)
+                if (users[sockfd].timer_flag)
                 {
                     del_timer(timer, sockfd);
-                    users[sockfd].timer_flag = 0;
+                    users[sockfd].timer_flag = false;
                 }
-                users[sockfd].improv = 0;
+                users[sockfd].is_done = false;
                 break;
             }
         }
@@ -390,14 +390,14 @@ void WebServer::deal_with_write(int sockfd)
 
         while (true)
         {
-            if (1 == users[sockfd].improv)
+            if (users[sockfd].is_done)
             {
-                if (1 == users[sockfd].timer_flag)
+                if (users[sockfd].timer_flag)
                 {
                     del_timer(timer, sockfd);
-                    users[sockfd].timer_flag = 0;
+                    users[sockfd].timer_flag = false;
                 }
-                users[sockfd].improv = 0;
+                users[sockfd].is_done = false;
                 break;
             }
         }

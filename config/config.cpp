@@ -13,7 +13,7 @@ Config::Config()
     // LT
     conn_is_LT = true;
     // 默认不优雅
-    is_opt_linger = false;
+    is_opt_linger = true;
     //
     conn_count = 8;
     //

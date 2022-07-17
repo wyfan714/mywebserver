@@ -104,8 +104,8 @@ void http_conn::init()
     m_write_idx = 0;
     is_post = false;
     is_write = false;
-    timer_flag = 0;
-    improv = 0;
+    timer_flag = false;
+    is_done = false;
     memset(m_read_buf, '\0', READ_BUFFER_SIZE);
     memset(m_write_buf, '\0', WRITE_BUFFER_SIZE);
     memset(m_real_file, '\0', FILENAME_LEN);

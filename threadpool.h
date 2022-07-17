@@ -127,27 +127,27 @@ void threadpool<T>::run()
             {
                 if (request->read())
                 {
-                    request->improv = 1;
+                    request->is_done = true;
                     request->mysql = conn_pool->getConnection();
                     request->process();
                     conn_pool->releaseConnection(request->mysql);
                 }
                 else
                 {
-                    request->improv = 1;
-                    request->timer_flag = 1;
+                    request->is_done = true;
+                    request->timer_flag = true;
                 }
             }
             else
             {
                 if (request->write())
                 {
-                    request->improv = 1;
+                    request->is_done = true;
                 }
                 else
                 {
-                    request->improv = 1;
-                    request->timer_flag = 1;
+                    request->is_done = true;
+                    request->timer_flag = true;
                 }
             }
         }

@@ -81,8 +81,8 @@ public:
     }
 
     void init_mysql_result(connectionPool *connPool);
-    int timer_flag;
-    int improv;
+    bool timer_flag;
+    bool is_done;
 
 private:
     void init();
