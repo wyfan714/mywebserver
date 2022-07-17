@@ -33,4 +33,5 @@
 
 2022_*
 webserver
-
+.vscode
+memo.cpp

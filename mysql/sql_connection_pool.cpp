@@ -22,13 +22,12 @@ connectionPool *connectionPool::getInstance()
     return &connPool;
 }
 
-void connectionPool::init(string url, string user, string passWord, string dataBaseName, int port, int maxConn, int IscloseLog)
+void connectionPool::init(string url, string user, string passWord, string dataBaseName, int port, int maxConn)
 {
     connUrl = url;
     connUser = user;
     connPort = port;
     connPassWord = passWord;
-    connIsCloseLog = IscloseLog;
     for (int i = 0; i < maxConn; i++)
     {
         MYSQL *conn = nullptr;
@@ -109,16 +108,4 @@ int connectionPool::getFreeConn()
 connectionPool::~connectionPool()
 {
     destroyPool();
-}
-
-connectionRAII::connectionRAII(MYSQL **SQL, connectionPool *connPool)
-{
-    *SQL = connPool->getConnection();
-    connRAII = *SQL;
-    poolRAII = connPool;
-}
-
-connectionRAII::~connectionRAII()
-{
-    poolRAII->releaseConnection(connRAII);
 }

@@ -5,48 +5,76 @@ Config::Config()
 {
 
     // 默认端口为16666
-    PORT = 16666;
-
-    LISTENTYPE = 0;
-
-    CONNTYPE = 0;
-
-    LOGTYPE = 0;
-
-    TIMERTYPE = 0;
+    port = 16666;
+    // 默认同步
+    is_sync_log = true;
+    // LT
+    listen_is_LT = true;
+    // LT
+    conn_is_LT = true;
+    // 默认不优雅
+    is_opt_linger = false;
+    //
+    conn_count = 8;
+    //
+    thread_count = 8;
+    // 默认不关闭
+    is_close_log = false;
+    // 默认是proactor 0是proactor 1是reactor
+    actor_model = 0;
 }
 
 void Config::parse_args(int argc, char *argv[])
 {
     int opt;
-    const char *str = "p:l:c:g:t";
+    const char *str = "pt:sl:lt:ct:cc:tc:am:ol:cl";
     while ((opt = getopt(argc, argv, str)) != -1)
     {
         switch (opt)
         {
-        case 'p':
+        case 'pt':
         {
-            PORT = atoi(optarg);
+            port = atoi(optarg);
             break;
         }
-        case 'l':
+        case 'sl':
         {
-            LISTENTYPE = atoi(optarg);
+            is_sync_log = atoi(optarg);
             break;
         }
-        case 'c':
+        case 'lt':
         {
-            CONNTYPE = atoi(optarg);
+            listen_is_LT = atoi(optarg);
             break;
         }
-        case 'g':
+        case 'ct':
         {
-            LOGTYPE = atoi(optarg);
+            conn_is_LT = atoi(optarg);
             break;
         }
-        case 't':
+        case 'cc':
         {
-            TIMERTYPE = atoi(optarg);
+            conn_count = atoi(optarg);
+            break;
+        }
+        case 'tc':
+        {
+            thread_count = atoi(optarg);
+            break;
+        }
+        case 'am':
+        {
+            actor_model = atoi(optarg);
+            break;
+        }
+        case 'ol':
+        {
+            is_opt_linger = atoi(optarg);
+            break;
+        }
+        case 'cl':
+        {
+            is_close_log = atoi(optarg);
             break;
         }
         default:

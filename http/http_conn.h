@@ -22,7 +22,8 @@
 #include <sys/uio.h>
 #include "../log/locker.h"
 #include "../mysql/sql_connection_pool.h"
-
+#include "../timer/time_wheel.h"
+#include <map>
 class http_conn
 {
     static const int FILENAME_LEN = 200;
@@ -69,7 +70,7 @@ public:
     ~http_conn() {}
 
 public:
-    void init(int sockfd, const sockaddr_in &addr, int LISTENTYPE, int CONNTYPE);
+    void init(int sockfd, const sockaddr_in &addr, char *root_dir, bool listen_is_LT, bool conn_is_LT, bool is_close_log, string user_name, string password, string db_name);
     void close_conn(bool read_close = true);
     void process();
     bool read();
@@ -78,6 +79,10 @@ public:
     {
         return &m_address;
     }
+
+    void init_mysql_result(connectionPool *connPool);
+    int timer_flag;
+    int improv;
 
 private:
     void init();
@@ -102,6 +107,9 @@ private:
 public:
     static int m_epollfd;
     static int m_user_count;
+    MYSQL *mysql;
+    bool is_write;
+    map<string, string> users;
 
 private:
     int m_sockfd;
@@ -132,9 +140,16 @@ private:
     int bytes_to_send;
     int bytes_have_send;
 
-    int m_listenType;
-    int m_connfdType;
-    int is_post;
+    bool is_post;
+
+    bool is_close_log;
+    bool listen_is_LT;
+    bool conn_is_LT;
+    char conn_user_name[100];
+    char conn_password[100];
+    char conn_db_name[100];
+    char *root_dir;
+    locker map_lock;
 };
 
 #endif

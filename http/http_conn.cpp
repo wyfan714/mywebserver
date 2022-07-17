@@ -10,9 +10,6 @@ const char *error_404_form = "The requested file was not found on this server.\n
 const char *error_500_title = "Internal Error";
 const char *error_500_form = "There was an unusual problem serving the requested file.\n";
 
-// !!!
-const char *doc_root = "/home/wyf/mywebserver/static";
-
 int setnonblocking(int fd)
 {
     int old_version = fcntl(fd, F_GETFL);
@@ -21,25 +18,17 @@ int setnonblocking(int fd)
     return old_version;
 }
 
-void addfd(int epollfd, int fd, bool one_shot, int LISTENTYPE, int CONNTYPE)
+void addfd(int epollfd, int fd, bool one_shot, bool is_LT)
 {
     epoll_event event;
     event.data.fd = fd;
-    if (CONNTYPE == 0)
-    {
-        event.events = EPOLLIN | EPOLLRDHUP;
-    }
-    else
+    if (!is_LT)
     {
         event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
     }
-    if (LISTENTYPE == 0)
-    {
-        event.events = EPOLLIN | EPOLLRDHUP;
-    }
     else
     {
-        event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+        event.events = EPOLLIN | EPOLLRDHUP;
     }
     if (one_shot)
     {
@@ -54,11 +43,11 @@ void removefd(int epollfd, int fd)
     close(fd);
 }
 
-void modfd(int epollfd, int fd, int ev, int CONNTYPE)
+void modfd(int epollfd, int fd, int ev, bool conn_is_LT)
 {
     epoll_event event;
     event.data.fd = fd;
-    if (CONNTYPE == 0)
+    if (conn_is_LT)
     {
         event.events = ev | EPOLLONESHOT | EPOLLRDHUP;
     }
@@ -80,17 +69,22 @@ void http_conn::close_conn(bool real_close)
         m_user_count--;
     }
 }
-void http_conn::init(int sockfd, const sockaddr_in &addr, int LISTENTYPE, int CONNTYPE)
+void http_conn::init(int sockfd, const sockaddr_in &addr, char *root_dir, bool listen_is_LT, bool conn_is_LT, bool is_close_log, string user_name, string password, string db_name)
 {
     m_sockfd = sockfd;
     m_address = addr;
     // debug use
     // int reuse = 1;
     // setsockopt(m_sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
-    addfd(m_epollfd, sockfd, true, LISTENTYPE, CONNTYPE);
+    addfd(m_epollfd, sockfd, true, conn_is_LT);
     m_user_count++;
-    m_listenType = LISTENTYPE;
-    m_connfdType = CONNTYPE;
+    this->root_dir = root_dir;
+    this->listen_is_LT = listen_is_LT;
+    this->conn_is_LT = conn_is_LT;
+    this->is_close_log = is_close_log;
+    strcpy(conn_user_name, user_name.c_str());
+    strcpy(conn_password, password.c_str());
+    strcpy(conn_db_name, db_name.c_str());
     init();
 }
 void http_conn::init()
@@ -108,7 +102,10 @@ void http_conn::init()
     m_checked_idx = 0;
     m_read_idx = 0;
     m_write_idx = 0;
-    is_post = 0;
+    is_post = false;
+    is_write = false;
+    timer_flag = 0;
+    improv = 0;
     memset(m_read_buf, '\0', READ_BUFFER_SIZE);
     memset(m_write_buf, '\0', WRITE_BUFFER_SIZE);
     memset(m_real_file, '\0', FILENAME_LEN);
@@ -155,7 +152,7 @@ bool http_conn::read()
         return false;
     }
     int bytes_read = 0;
-    if (m_connfdType == 0)
+    if (conn_is_LT)
     {
         bytes_read = recv(m_sockfd, m_read_buf + m_read_idx, READ_BUFFER_SIZE - m_read_idx, 0);
         m_read_idx += bytes_read;
@@ -163,6 +160,7 @@ bool http_conn::read()
         {
             return false;
         }
+        return true;
     }
     else
     {
@@ -357,8 +355,8 @@ http_conn::HTTP_CODE http_conn::process_read()
 
 http_conn::HTTP_CODE http_conn::do_request()
 {
-    strcpy(m_real_file, doc_root);
-    int len = strlen(doc_root);
+    strcpy(m_real_file, root_dir);
+    int len = strlen(root_dir);
     const char *p = strrchr(m_url, '/');
     if (is_post)
     {
@@ -422,7 +420,7 @@ bool http_conn::write()
     int temp = 0;
     if (bytes_to_send == 0)
     {
-        modfd(m_epollfd, m_sockfd, EPOLLIN, m_connfdType);
+        modfd(m_epollfd, m_sockfd, EPOLLIN, conn_is_LT);
         init();
         return true;
     }
@@ -434,7 +432,7 @@ bool http_conn::write()
 
             if (errno == EAGAIN)
             {
-                modfd(m_epollfd, m_sockfd, EPOLLOUT, m_connfdType);
+                modfd(m_epollfd, m_sockfd, EPOLLOUT, conn_is_LT);
                 return true;
             }
             unmap();
@@ -457,7 +455,7 @@ bool http_conn::write()
         if (bytes_to_send <= 0)
         {
             unmap();
-            modfd(m_epollfd, m_sockfd, EPOLLIN, m_connfdType);
+            modfd(m_epollfd, m_sockfd, EPOLLIN, conn_is_LT);
 
             if (m_linger)
             {
@@ -622,7 +620,7 @@ void http_conn::process()
     HTTP_CODE read_ret = process_read();
     if (read_ret == NO_REQUEST)
     {
-        modfd(m_epollfd, m_sockfd, EPOLLIN, m_connfdType);
+        modfd(m_epollfd, m_sockfd, EPOLLIN, conn_is_LT);
         return;
     }
     bool write_ret = process_write(read_ret);
@@ -630,5 +628,35 @@ void http_conn::process()
     {
         close_conn();
     }
-    modfd(m_epollfd, m_sockfd, EPOLLOUT, m_connfdType);
+    modfd(m_epollfd, m_sockfd, EPOLLOUT, conn_is_LT);
+}
+
+void http_conn::init_mysql_result(connectionPool *connPool)
+{
+    //先从连接池中取一个连接
+    MYSQL *mysql = connPool->getConnection();
+
+    //在user表中检索username，passwd数据，浏览器端输入
+    if (mysql_query(mysql, "SELECT username,passwd FROM user"))
+    {
+        LOG_ERROR("SELECT error:%s\n", mysql_error(mysql));
+    }
+
+    //从表中检索完整的结果集
+    MYSQL_RES *result = mysql_store_result(mysql);
+
+    //返回结果集中的列数
+    int num_fields = mysql_num_fields(result);
+
+    //返回所有字段结构的数组
+    MYSQL_FIELD *fields = mysql_fetch_fields(result);
+
+    //从结果集中获取下一行，将对应的用户名和密码，存入map中
+    while (MYSQL_ROW row = mysql_fetch_row(result))
+    {
+        string temp1(row[0]);
+        string temp2(row[1]);
+        users[temp1] = temp2;
+    }
+    connPool->releaseConnection(mysql);
 }

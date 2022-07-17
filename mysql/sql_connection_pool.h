@@ -22,7 +22,7 @@ public:
     void destroyPool();
 
     static connectionPool *getInstance();
-    void init(string url, string user, string passWord, string dataBaseName, int port, int maxConn, int IscloseLog);
+    void init(string url, string user, string passWord, string dataBaseName, int port, int maxConn);
 
 private:
     connectionPool();
@@ -40,16 +40,6 @@ public:
     string connUser;
     string connPassWord;
     string connDataBaseName;
-    string connIsCloseLog;
 };
 
-class connectionRAII
-{
-    connectionRAII(MYSQL **conn, connectionPool *connPool);
-    ~connectionRAII();
-
-private:
-    MYSQL *connRAII;
-    connectionPool *poolRAII;
-};
 #endif

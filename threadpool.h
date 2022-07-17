@@ -7,14 +7,16 @@
 #include <pthread.h>
 
 #include "log/locker.h"
+#include "mysql/sql_connection_pool.h"
 
 template <typename T>
 class threadpool
 {
 public:
-    threadpool(int thread_number = 8, int max_requests = 10000);
+    threadpool(int actor_model, connectionPool *connPool, int thread_number = 8, int max_requests = 10000);
     ~threadpool();
     bool append(T *request);
+    bool append_with_state(T *request, bool is_write);
 
 private:
     static void *worker(void *arg);
@@ -27,11 +29,12 @@ private:
     std::list<T *> m_workqueue; // 请求队列
     locker m_queuelocker;       // 请求队列的互斥锁
     sem m_queuestat;            // 是否有任务需要处理
-    bool m_stop;
+    connectionPool *conn_pool;
+    int actor_mode;
 };
 
 template <typename T>
-threadpool<T>::threadpool(int thread_number, int max_requests) : m_thread_number(thread_number), m_max_requests(max_requests), m_stop(false), m_threads(NULL)
+threadpool<T>::threadpool(int actor_model, connectionPool *pool, int thread_number, int max_requests) : m_thread_number(thread_number), actor_mode(actor_model), conn_pool(pool), m_max_requests(max_requests), m_threads(NULL)
 {
     if ((thread_number <= 0) || (max_requests <= 0))
     {
@@ -61,7 +64,6 @@ template <typename T>
 threadpool<T>::~threadpool()
 {
     delete[] m_threads;
-    m_stop = true;
 }
 template <typename T>
 bool threadpool<T>::append(T *request)
@@ -78,6 +80,21 @@ bool threadpool<T>::append(T *request)
     return true;
 }
 template <typename T>
+bool threadpool<T>::append_with_state(T *request, bool is_write)
+{
+    m_queuelocker.lock();
+    if (m_workqueue.size() > m_max_requests)
+    {
+        m_queuelocker.unlock();
+        return false;
+    }
+    request->is_write = is_write;
+    m_workqueue.push_back(request);
+    m_queuelocker.unlock();
+    m_queuestat.post();
+    return true;
+}
+template <typename T>
 void *threadpool<T>::worker(void *arg)
 {
     threadpool *pool = (threadpool *)arg;
@@ -87,7 +104,7 @@ void *threadpool<T>::worker(void *arg)
 template <typename T>
 void threadpool<T>::run()
 {
-    while (!m_stop)
+    while (true)
     {
         m_queuestat.wait();
         m_queuelocker.lock();
@@ -103,7 +120,43 @@ void threadpool<T>::run()
         {
             continue;
         }
-        request->process();
+        // reactor
+        if (actor_mode == 1)
+        {
+            if (!request->is_write)
+            {
+                if (request->read())
+                {
+                    request->improv = 1;
+                    request->mysql = conn_pool->getConnection();
+                    request->process();
+                    conn_pool->releaseConnection(request->mysql);
+                }
+                else
+                {
+                    request->improv = 1;
+                    request->timer_flag = 1;
+                }
+            }
+            else
+            {
+                if (request->write())
+                {
+                    request->improv = 1;
+                }
+                else
+                {
+                    request->improv = 1;
+                    request->timer_flag = 1;
+                }
+            }
+        }
+        else
+        {
+            request->mysql = conn_pool->getConnection();
+            request->process();
+            conn_pool->releaseConnection(request->mysql);
+        }
     }
 }
 #endif
