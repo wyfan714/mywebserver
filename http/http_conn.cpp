@@ -239,7 +239,7 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char *text)
     //
     if (strlen(m_url) == 1)
     {
-        strcat(m_url, "index.html");
+        strcat(m_url, "login.html");
     }
     m_check_state = CHECK_STATE_HEADER;
     return NO_REQUEST;
@@ -358,26 +358,81 @@ http_conn::HTTP_CODE http_conn::do_request()
     strcpy(m_real_file, root_dir);
     int len = strlen(root_dir);
     const char *p = strrchr(m_url, '/');
-    if (is_post)
+    if (is_post && (*(p + 1) == '0' || *(p + 1) == '1'))
     {
         // post请求
         // do something
+        char *m_url_real = (char *)malloc(sizeof(char) * 200);
+        strcpy(m_url_real, "/");
+        strcat(m_url_real, m_url + 2);
+        strncpy(m_real_file + len, m_url_real, FILENAME_LEN - len - 1);
+        free(m_url_real);
+
+        //将用户名和密码提取出来
+        // user=123&passwd=123
+        char name[100], password[100];
+        int i;
+        for (i = 5; m_string[i] != '&'; ++i)
+            name[i - 5] = m_string[i];
+        name[i - 5] = '\0';
+
+        int j = 0;
+        for (i = i + 10; m_string[i] != '\0'; ++i, ++j)
+            password[j] = m_string[i];
+        password[j] = '\0';
+
+        if (*(p + 1) == '1')
+        {
+            //如果是注册，先检测数据库中是否有重名的
+            //没有重名的，进行增加数据
+            char *sql_insert = (char *)malloc(sizeof(char) * 200);
+            strcpy(sql_insert, "INSERT INTO user(username, passwd) VALUES(");
+            strcat(sql_insert, "'");
+            strcat(sql_insert, name);
+            strcat(sql_insert, "', '");
+            strcat(sql_insert, password);
+            strcat(sql_insert, "')");
+
+            if (users.find(name) == users.end())
+            {
+                map_lock.lock();
+                int res = mysql_query(mysql, sql_insert);
+                users.insert(pair<string, string>(name, password));
+                map_lock.unlock();
+
+                if (!res)
+                    strcpy(m_url, "/login.html");
+                else
+                    strcpy(m_url, "/registerError.html");
+            }
+            else
+                strcpy(m_url, "/registerError.html");
+        }
+        //如果是登录，直接判断
+        //若浏览器端输入的用户名和密码在表中可以查找到，返回1，否则返回0
+        else if (*(p + 1) == '0')
+        {
+            if (users.find(name) != users.end() && users[name] == password)
+                strcpy(m_url, "/index.html");
+            else
+                strcpy(m_url, "/loginError.html");
+        }
     }
-    if (*(p + 1) == '0')
+    if (*(p + 1) == '3')
     {
         char *m_url_real = (char *)malloc(sizeof(char) * 200);
         strcpy(m_url_real, "/picture.html");
         strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
         free(m_url_real);
     }
-    else if (*(p + 1) == '1')
+    else if (*(p + 1) == '4')
     {
         char *m_url_real = (char *)malloc(sizeof(char) * 200);
         strcpy(m_url_real, "/video.html");
         strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
         free(m_url_real);
     }
-    else if (*(p + 1) == '2')
+    else if (*(p + 1) == '5')
     {
         char *m_url_real = (char *)malloc(sizeof(char) * 200);
         strcpy(m_url_real, "/aboutme.html");

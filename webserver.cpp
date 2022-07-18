@@ -8,6 +8,27 @@ static time_wheel tw_wheel;
 static int pipefd[2];
 static int epollfd;
 
+void addsig(int sig, void (*handler)(int), bool restart = true)
+{
+    struct sigaction sa;
+    memset(&sa, '\0', sizeof(sa));
+    sa.sa_handler = handler;
+    if (restart)
+    {
+        sa.sa_flags |= SA_RESTART;
+    }
+    sigfillset(&sa.sa_mask);
+    assert(sigaction(sig, &sa, NULL) != -1);
+}
+
+static void sig_handler(int sig)
+{
+    // 保留原来的errno,在函数最后恢复,以保证函数的可重入性
+    int save_errno = errno;
+    int msg = sig;
+    send(pipefd[1], (char *)&msg, 1, 0);
+    errno = save_errno;
+}
 WebServer::WebServer()
 {
     users = new http_conn[MAX_FD];
@@ -70,27 +91,6 @@ void WebServer::thread_pool()
     thd_pool = new threadpool<http_conn>(actor_model, conn_pool, thread_count);
 }
 
-void addsig(int sig, void (*handler)(int), bool restart = true)
-{
-    struct sigaction sa;
-    memset(&sa, '\0', sizeof(sa));
-    sa.sa_handler = handler;
-    if (restart)
-    {
-        sa.sa_flags |= SA_RESTART;
-    }
-    sigfillset(&sa.sa_mask);
-    assert(sigaction(sig, &sa, NULL) != -1);
-}
-
-static void sig_handler(int sig)
-{
-    // 保留原来的errno,在函数最后恢复,以保证函数的可重入性
-    int save_errno = errno;
-    int msg = sig;
-    send(pipefd[1], (char *)&msg, 1, 0);
-    errno = save_errno;
-}
 void WebServer::event_listen()
 {
     listenfd = socket(PF_INET, SOCK_STREAM, 0);
