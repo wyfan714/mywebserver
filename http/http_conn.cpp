@@ -410,7 +410,9 @@ http_conn::HTTP_CODE http_conn::deal_post()
         init_mysql_result();
         if (users.find(name) == users.end())
         {
+            mysql = connPool->getConnection();
             int res = mysql_query(mysql, sql_insert);
+            connPool->releaseConnection(mysql);
             if (!res)
             {
                 return SUCCESS_REQUEST;
@@ -810,7 +812,10 @@ void http_conn::init_mysql_result()
 {
     //先从连接池中取一个连接
     MYSQL *mysql = connPool->getConnection();
-
+    if (mysql == nullptr)
+    {
+        LOG_ERROR("%s", "get mysql connection fail!");
+    }
     //在user表中检索username，passwd数据，浏览器端输入
     if (mysql_query(mysql, "SELECT username,passwd FROM user"))
     {

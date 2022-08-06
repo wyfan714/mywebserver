@@ -153,9 +153,7 @@ void threadpool<T>::run()
         }
         else
         {
-            request->mysql = conn_pool->getConnection();
             request->process();
-            conn_pool->releaseConnection(request->mysql);
         }
     }
 }

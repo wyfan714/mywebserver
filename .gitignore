@@ -35,3 +35,4 @@
 webserver
 .vscode
 memo.cpp
+*.swp

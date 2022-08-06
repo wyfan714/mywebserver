@@ -42,10 +42,10 @@ class Video {
         this.$menu = $(`
 <div class="welcome-menu">
         <div align="center" class="video_field">
-        <input type=text class="send_msg" style="width:800px;height:30px;"/><br/>
-        <button class="show_button"">发送信息</button><br/>
-        输出：<div class="show_txt"></div>
-        </div>
+         <video width="906" height="506" controls>
+         <source src="../../templates/drama.mp4" type="video/mp4">
+         </video>
+         </div>
         <button type="button" class="back">返回选择
         </button>
 </div>
@@ -56,10 +56,6 @@ class Video {
         this.$menu.hide();
         this.root.$welcome.append(this.$menu);
         this.$back = this.$menu.find('.back');
-        this.$show_button = this.$menu.find('.show_button');
-        this.$txt = this.$menu.find('.show_txt');
-        this.$send_msg = this.$menu.find('.send_msg');
-        this.ws = new WebSocket("ws://182.92.85.127:9002");
         this.start();
     }
     start() {
@@ -71,10 +67,6 @@ class Video {
             outer.hide();
             outer.root.choose.show();
         });
-        this.$show_button.click(function () {
-            var msg = outer.$send_msg.val();
-            outer.send(msg);
-        });
     }
     show() {
         this.$menu.show();
@@ -83,23 +75,6 @@ class Video {
         this.$menu.hide();
     }
 
-    send(msg) {
-        let outer = this;
-        // ws.onopen = function (evt) {
-        //     console.log("Connection open ...");
-        //     ws.send(msg);
-        // };
-        this.ws.send(msg);
-        this.ws.onmessage = function (evt) {
-            console.log("Received Message: " + evt.data);
-            outer.$txt.html(evt.data);
-            // ws.close();
-        };
-
-        // ws.onclose = function (evt) {
-        //     console.log("Connection closed.");
-        // };
-    }
 }
 
 
@@ -130,7 +105,7 @@ class Login {
     </div>
 </div>
         `);
-        this.$menu.hide();
+        //this.$menu.hide();
         this.root.$welcome.append(this.$menu);
         this.$username = this.$menu.find('.username');
         this.$password = this.$menu.find('.password');
@@ -161,7 +136,7 @@ class Login {
                 success: function (resp) {
                     if (resp === 'success') {
                         outer.hide();
-                        outer.clear();
+                        //outer.clear();
                         outer.root.choose.show();
                     } else {
                         outer.add_message("用户名或者密码错误！");
@@ -266,7 +241,7 @@ class Signin {
                 success: function (resp) {
                     if (resp === 'success') {
                         outer.hide();
-                        outer.clear();
+                        //outer.clear();
                         outer.root.login.show();
                     } else {
                         outer.add_message("用户已存在！");
@@ -344,7 +319,7 @@ class Choose {
     </div>
 </div>
         `);
-        this.$menu.show();
+        //this.$menu.show();
         this.root.$welcome.append(this.$menu);
         this.$about_me = this.$menu.find('.about-me');
         this.$database = this.$menu.find('.database');
@@ -715,7 +690,7 @@ class GamePlayground {
         this.game_map = new GameMap(this);
         this.mode = mode;
         this.state = "waiting"; // waiting -> fighting -> over
-        // this.notice_board = new NoticeBoard(this);
+        this.notice_board = new NoticeBoard(this);
         this.score_board = new ScoreBoard(this);
         this.player_count = 0;
         this.resize();
@@ -727,7 +702,7 @@ class GamePlayground {
             }
         }
         else if (mode === "multi mode") {
-            // this.chat_field = new ChatField(this);
+            this.chat_field = new ChatField(this);
             this.mps = new MultiPlayerSocket(this);
             this.mps.uuid = this.players[0].uuid;
             this.mps.ws.onopen = function () {
@@ -749,10 +724,10 @@ class GamePlayground {
             this.game_map.destroy();
             this.game_map = null;
         }
-        // if (this.notice_board) {
-        //     this.notice_board.destroy();
-        //     this.notice_board = null;
-        // }
+        if (this.notice_board) {
+            this.notice_board.destroy();
+            this.notice_board = null;
+        }
         if (this.score_board) {
             this.score_board.destroy();
             this.score_board = null;
@@ -797,10 +772,10 @@ class Player extends GameObject {
     }
     start() {
         this.playground.player_count++;
-        // this.playground.notice_board.write("已就绪：" + this.playground.player_count + "人");
-        if (this.playground.player_count >= 3) {
+        this.playground.notice_board.write("已就绪：" + this.playground.player_count + "人");
+        if (this.playground.player_count >= 2) {
             this.playground.state = "fighting";
-            // this.playground.notice_board.write("Fighting");
+            this.playground.notice_board.write("Fighting");
         }
         if (this.charactor === "me") {
             this.add_listening_events();
@@ -850,15 +825,15 @@ class Player extends GameObject {
         });
         this.playground.game_map.$canvas.keydown(function (e) {
             if (e.which === 13) {
-                // if (outer.playground.mode === "multi mode") {
-                //     outer.playground.chat_field.show_input();
-                //     return false;
-                // }
+                 if (outer.playground.mode === "multi mode") {
+                     outer.playground.chat_field.show_input();
+                     return false;
+                 }
             } else if (e.which === 27) {
-                // if (outer.playground.mode === "multi mode") {
-                //     outer.playground.chat_field.hide_input();
-                //     return false;
-                // }
+                 if (outer.playground.mode === "multi mode") {
+                     outer.playground.chat_field.hide_input();
+                     return false;
+                 }
             }
 
 
@@ -1414,18 +1389,122 @@ class MultiPlayerSocket {
         }
     }
 
-    // send_message(username, text) {
-    //     let outer = this;
-    //     this.ws.send(JSON.stringify({
-    //         'event': "message",
-    //         'uuid': outer.uuid,
-    //         'username': username,
-    //         'text': text,
+     send_message(username, text) {
+         let outer = this;
+         this.ws.send(JSON.stringify({
+             'event': "message",
+             'uuid': outer.uuid,
+             'username': username,
+             'text': text,
 
-    //     }));
-    // }
-    // receive_message(uuid, username, text) {
-    //     this.playground.chat_field.add_message(username, text);
-    // }
+         }));
+     }
+     receive_message(uuid, username, text) {
+         this.playground.chat_field.add_message(username, text);
+     }
+}
+class ChatField {
+    constructor(playground) {
+        this.playground = playground;
+
+        this.$history = $(`<div class="ac-game-chat-field-history">历史记录</div>`);
+        this.$input = $(`<input type="text" class="ac-game-chat-field-input">`);
+
+        this.$history.hide();
+        this.$input.hide();
+
+        this.func_id = null;
+
+        this.playground.$playground.append(this.$history);
+        this.playground.$playground.append(this.$input);
+
+        this.start();
+    }
+
+    start() {
+        this.add_listening_events();
+    }
+
+    add_listening_events() {
+        let outer = this;
+
+        this.$input.keydown(function(e) {
+            if (e.which === 27) {  // ESC
+                outer.hide_input();
+                return false;
+            } else if (e.which === 13) {  // ENTER
+                let username = outer.playground.root.login.$username.val();
+                let text = outer.$input.val();
+                if (text) {
+                    outer.$input.val("");
+                    outer.add_message(username, text);
+                    outer.playground.mps.send_message(username, text);
+                }
+                return false;
+            }
+        });
+    }
+
+    render_message(message) {
+        return $(`<div>${message}</div>`);
+    }
+
+    add_message(username, text) {
+        this.show_history();
+        let message = `[${username}]${text}`;
+        this.$history.append(this.render_message(message));
+        this.$history.scrollTop(this.$history[0].scrollHeight);
+    }
+
+    show_history() {
+        let outer = this;
+        this.$history.fadeIn();
+
+        if (this.func_id) clearTimeout(this.func_id);
+
+        this.func_id = setTimeout(function() {
+            outer.$history.fadeOut();
+            outer.func_id = null;
+        }, 3000);
+    }
+
+    show_input() {
+        this.show_history();
+
+        this.$input.show();
+        this.$input.focus();
+    }
+
+    hide_input() {
+        this.$input.hide();
+        this.playground.game_map.$canvas.focus();
+    }
+}
+class NoticeBoard extends GameObject {
+    constructor(playground) {
+        super();
+
+        this.playground = playground;
+        this.ctx = this.playground.game_map.ctx;
+        this.text = "已就绪：0人";
+    }
+
+    start() {
+    }
+
+    write(text) {
+        this.text = text;
+    }
+
+    update() {
+        this.render();
+    }
+
+    render() {
+        this.ctx.font = "20px serif";
+        this.ctx.fillStyle = "white";
+        this.ctx.textAlign = "center";
+        this.ctx.fillText(this.text, this.playground.width / 2, 20);
+    }
 }
 
