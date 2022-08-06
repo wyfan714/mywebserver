@@ -24,6 +24,13 @@
 #include "../mysql/sql_connection_pool.h"
 #include "../timer/time_wheel.h"
 #include <map>
+#include <thrift/protocol/TBinaryProtocol.h>
+#include <thrift/transport/TSocket.h>
+#include <thrift/transport/TTransportUtils.h>
+#include <thrift/transport/TBufferTransports.h>
+#include "../log/log.h"
+#include "../database/crud.h"
+#include "../database/skip_types.h"
 class http_conn
 {
     static const int FILENAME_LEN = 200;
@@ -54,6 +61,9 @@ class http_conn
         BAD_REQUEST,
         NO_RESOURCE,
         FORBIDDEN_REQUEST,
+        SUCCESS_REQUEST,
+        TEXT_REQUEST,
+        FAIL_REQUEST,
         FILE_REQUEST,
         INTERNAL_ERROR,
         CLOSED_CONNECTION
@@ -70,7 +80,7 @@ public:
     ~http_conn() {}
 
 public:
-    void init(int sockfd, const sockaddr_in &addr, char *root_dir, bool listen_is_LT, bool conn_is_LT, bool is_close_log, string user_name, string password, string db_name);
+    void init(int sockfd, const sockaddr_in &addr, char *root_dir, bool listen_is_LT, bool conn_is_LT, bool is_close_log, string user_name, string password, string db_name, connectionPool *connPool);
     void close_conn(bool read_close = true);
     void process();
     bool read();
@@ -80,7 +90,7 @@ public:
         return &m_address;
     }
 
-    void init_mysql_result(connectionPool *connPool);
+    void init_mysql_result();
     bool timer_flag;
     bool is_done;
 
@@ -92,6 +102,8 @@ private:
     HTTP_CODE parse_request_line(char *text);
     HTTP_CODE parse_headers(char *text);
     HTTP_CODE parse_content(char *text);
+    HTTP_CODE deal_post();
+    HTTP_CODE deal_get();
     HTTP_CODE do_request();
     char *get_line() { return m_read_buf + m_start_line; }
     LINE_STATUS parse_line();
@@ -139,15 +151,15 @@ private:
     char *m_string; //存储请求头数据
     int bytes_to_send;
     int bytes_have_send;
-
     bool is_post;
-
+    string to_send;
     bool is_close_log;
     bool listen_is_LT;
     bool conn_is_LT;
     char conn_user_name[100];
     char conn_password[100];
     char conn_db_name[100];
+    connectionPool *connPool;
     char *root_dir;
     locker map_lock;
 };

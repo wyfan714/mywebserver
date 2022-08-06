@@ -33,7 +33,7 @@ WebServer::WebServer()
 {
     users = new http_conn[MAX_FD];
     users_timer = new client_data[MAX_FD];
-    root_dir = "/home/wyf/mywebserver/static";
+    root_dir = "/home/wyf/mywebserver";
     addsig(SIGPIPE, SIG_IGN);
 }
 
@@ -231,8 +231,8 @@ bool WebServer::deal_client_connect()
             LOG_ERROR("%s", "Internal server busy");
             return false;
         }
-        users[connfd].init(connfd, client_address, root_dir, listen_is_LT, conn_is_LT, is_close_log, user_name, password, db_name);
-        users[connfd].init_mysql_result(conn_pool);
+        users[connfd].init(connfd, client_address, root_dir, listen_is_LT, conn_is_LT, is_close_log, user_name, password, db_name, conn_pool);
+        // users[connfd].init_mysql_result(conn_pool);
 
         add_timer(connfd, client_address);
     }
@@ -251,8 +251,8 @@ bool WebServer::deal_client_connect()
                 LOG_ERROR("%s", "Internal server busy");
                 break;
             }
-            users[connfd].init(connfd, client_address, root_dir, listen_is_LT, conn_is_LT, is_close_log, user_name, password, db_name);
-            users[connfd].init_mysql_result(conn_pool);
+            users[connfd].init(connfd, client_address, root_dir, listen_is_LT, conn_is_LT, is_close_log, user_name, password, db_name, conn_pool);
+            // users[connfd].init_mysql_result(conn_pool);
             add_timer(connfd, client_address);
         }
         return false;

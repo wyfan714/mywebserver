@@ -1,5 +1,9 @@
 #include "http_conn.h"
-#include "../log/log.h"
+
+using namespace ::apache::thrift;
+using namespace ::apache::thrift::protocol;
+using namespace ::apache::thrift::transport;
+using namespace ::database_service;
 const char *ok_200_title = "OK";
 const char *error_400_title = "Bad Request";
 const char *error_400_form = "Your request has bad syntax or is inherently impossible to satisfy.\n";
@@ -9,7 +13,8 @@ const char *error_404_title = "Not Found";
 const char *error_404_form = "The requested file was not found on this server.\n";
 const char *error_500_title = "Internal Error";
 const char *error_500_form = "There was an unusual problem serving the requested file.\n";
-
+const char *success = "success";
+const char *fail = "fail";
 int setnonblocking(int fd)
 {
     int old_version = fcntl(fd, F_GETFL);
@@ -69,7 +74,7 @@ void http_conn::close_conn(bool real_close)
         m_user_count--;
     }
 }
-void http_conn::init(int sockfd, const sockaddr_in &addr, char *root_dir, bool listen_is_LT, bool conn_is_LT, bool is_close_log, string user_name, string password, string db_name)
+void http_conn::init(int sockfd, const sockaddr_in &addr, char *root_dir, bool listen_is_LT, bool conn_is_LT, bool is_close_log, string user_name, string password, string db_name, connectionPool *connPool)
 {
     m_sockfd = sockfd;
     m_address = addr;
@@ -82,6 +87,7 @@ void http_conn::init(int sockfd, const sockaddr_in &addr, char *root_dir, bool l
     this->listen_is_LT = listen_is_LT;
     this->conn_is_LT = conn_is_LT;
     this->is_close_log = is_close_log;
+    this->connPool = connPool;
     strcpy(conn_user_name, user_name.c_str());
     strcpy(conn_password, password.c_str());
     strcpy(conn_db_name, db_name.c_str());
@@ -202,7 +208,7 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char *text)
     else if (strcasecmp(method, "POST") == 0)
     {
         m_method = POST;
-        is_post = 1;
+        is_post = true;
     }
     else
     {
@@ -239,8 +245,9 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char *text)
     //
     if (strlen(m_url) == 1)
     {
-        strcat(m_url, "login.html");
+        strcat(m_url, "templates/welcome.html");
     }
+    std::cout << m_url << std::endl;
     m_check_state = CHECK_STATE_HEADER;
     return NO_REQUEST;
 }
@@ -353,21 +360,11 @@ http_conn::HTTP_CODE http_conn::process_read()
     return NO_REQUEST;
 }
 
-http_conn::HTTP_CODE http_conn::do_request()
+http_conn::HTTP_CODE http_conn::deal_post()
 {
-    strcpy(m_real_file, root_dir);
-    int len = strlen(root_dir);
     const char *p = strrchr(m_url, '/');
-    if (is_post && (*(p + 1) == '0' || *(p + 1) == '1'))
+    if (!strcmp(p + 1, "login"))
     {
-        // post请求
-        // do something
-        char *m_url_real = (char *)malloc(sizeof(char) * 200);
-        strcpy(m_url_real, "/");
-        strcat(m_url_real, m_url + 2);
-        strncpy(m_real_file + len, m_url_real, FILENAME_LEN - len - 1);
-        free(m_url_real);
-
         //将用户名和密码提取出来
         // user=123&passwd=123
         char name[100], password[100];
@@ -377,73 +374,154 @@ http_conn::HTTP_CODE http_conn::do_request()
         name[i - 5] = '\0';
 
         int j = 0;
-        for (i = i + 10; m_string[i] != '\0'; ++i, ++j)
+        for (i = i + 8; m_string[i] != '\0'; ++i, ++j)
             password[j] = m_string[i];
         password[j] = '\0';
+        init_mysql_result();
+        if (users.find(name) != users.end() && users[name] == password)
+            return SUCCESS_REQUEST;
+        else
+            return FAIL_REQUEST;
+    }
+    else if (!strcmp(p + 1, "register"))
+    {
+        //将用户名和密码提取出来
+        // user=123&passwd=123
+        char name[100], password[100];
+        int i;
+        for (i = 5; m_string[i] != '&'; ++i)
+            name[i - 5] = m_string[i];
+        name[i - 5] = '\0';
 
-        if (*(p + 1) == '1')
+        int j = 0;
+        for (i = i + 8; m_string[i] != '\0'; ++i, ++j)
+            password[j] = m_string[i];
+        password[j] = '\0';
+        cout << name << " " << password << endl;
+        //如果是注册，先检测数据库中是否有重名的
+        //没有重名的，进行增加数据
+        char *sql_insert = (char *)malloc(sizeof(char) * 200);
+        strcpy(sql_insert, "INSERT INTO user(username, passwd) VALUES(");
+        strcat(sql_insert, "'");
+        strcat(sql_insert, name);
+        strcat(sql_insert, "', '");
+        strcat(sql_insert, password);
+        strcat(sql_insert, "')");
+        init_mysql_result();
+        if (users.find(name) == users.end())
         {
-            //如果是注册，先检测数据库中是否有重名的
-            //没有重名的，进行增加数据
-            char *sql_insert = (char *)malloc(sizeof(char) * 200);
-            strcpy(sql_insert, "INSERT INTO user(username, passwd) VALUES(");
-            strcat(sql_insert, "'");
-            strcat(sql_insert, name);
-            strcat(sql_insert, "', '");
-            strcat(sql_insert, password);
-            strcat(sql_insert, "')");
-
-            if (users.find(name) == users.end())
+            int res = mysql_query(mysql, sql_insert);
+            if (!res)
             {
-                map_lock.lock();
-                int res = mysql_query(mysql, sql_insert);
-                users.insert(pair<string, string>(name, password));
-                map_lock.unlock();
-
-                if (!res)
-                    strcpy(m_url, "/login.html");
-                else
-                    strcpy(m_url, "/registerError.html");
+                return SUCCESS_REQUEST;
             }
             else
-                strcpy(m_url, "/registerError.html");
+            {
+                return FAIL_REQUEST;
+            }
         }
-        //如果是登录，直接判断
-        //若浏览器端输入的用户名和密码在表中可以查找到，返回1，否则返回0
-        else if (*(p + 1) == '0')
+        else
+            return FAIL_REQUEST;
+    }
+    else if (!strcmp(p + 1, "search"))
+    {
+        std::shared_ptr<TTransport> socket(new TSocket("localhost", 9090));
+        std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+        std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+        crudClient client(protocol);
+        try
         {
-            if (users.find(name) != users.end() && users[name] == password)
-                strcpy(m_url, "/index.html");
-            else
-                strcpy(m_url, "/loginError.html");
+            transport->open();
+            char key[100];
+            int i;
+            for (i = 4; m_string[i] != '\0'; ++i)
+                key[i - 4] = m_string[i];
+            key[i - 4] = '\0';
+            client.search_element(to_send, key);
+            cout << to_send << endl;
+            transport->close();
+            return TEXT_REQUEST;
+        }
+        catch (TException &tx)
+        {
+            cout << "ERROR: " << tx.what() << endl;
         }
     }
-    if (*(p + 1) == '3')
+    else if (!strcmp(p + 1, "delete"))
     {
-        char *m_url_real = (char *)malloc(sizeof(char) * 200);
-        strcpy(m_url_real, "/picture.html");
-        strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
-        free(m_url_real);
+        std::shared_ptr<TTransport> socket(new TSocket("localhost", 9090));
+        std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+        std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+        crudClient client(protocol);
+        try
+        {
+            transport->open();
+            char key[100];
+            int i;
+            for (i = 4; m_string[i] != '\0'; ++i)
+                key[i - 4] = m_string[i];
+            key[i - 4] = '\0';
+            // 1 为成功 0 为失败
+            int ret = client.delete_element(key);
+            transport->close();
+            if (ret == 1)
+            {
+                return SUCCESS_REQUEST;
+            }
+            else
+            {
+                return FAIL_REQUEST;
+            }
+        }
+        catch (TException &tx)
+        {
+            cout << "ERROR: " << tx.what() << endl;
+        }
     }
-    else if (*(p + 1) == '4')
+    else if (!strcmp(p + 1, "insert"))
     {
-        char *m_url_real = (char *)malloc(sizeof(char) * 200);
-        strcpy(m_url_real, "/video.html");
-        strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
-        free(m_url_real);
-    }
-    else if (*(p + 1) == '5')
-    {
-        char *m_url_real = (char *)malloc(sizeof(char) * 200);
-        strcpy(m_url_real, "/aboutme.html");
-        strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
-        free(m_url_real);
-    }
-    else
-    {
-        strncpy(m_real_file + len, m_url, FILENAME_LEN - len - 1);
-    }
+        std::shared_ptr<TTransport> socket(new TSocket("localhost", 9090));
+        std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+        std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+        crudClient client(protocol);
+        try
+        {
+            transport->open();
+            // key=123&value=123
+            char key[100], value[100];
+            int i;
+            for (i = 4; m_string[i] != '&'; ++i)
+                key[i - 4] = m_string[i];
+            key[i - 4] = '\0';
 
+            int j = 0;
+            for (i = i + 7; m_string[i] != '\0'; ++i, ++j)
+                value[j] = m_string[i];
+            value[j] = '\0';
+            // 1 为成功 0 为失败
+            int ret = client.insert_element(key, value);
+            transport->close();
+            if (ret == 1)
+            {
+                return SUCCESS_REQUEST;
+            }
+            else
+            {
+                return FAIL_REQUEST;
+            }
+        }
+        catch (TException &tx)
+        {
+            cout << "ERROR: " << tx.what() << endl;
+        }
+    }
+}
+
+http_conn::HTTP_CODE http_conn::deal_get()
+{
+    strcpy(m_real_file, root_dir);
+    int len = strlen(root_dir);
+    strncpy(m_real_file + len, m_url, FILENAME_LEN - len - 1);
     if (stat(m_real_file, &m_file_stat) < 0)
     {
         return NO_RESOURCE;
@@ -460,6 +538,18 @@ http_conn::HTTP_CODE http_conn::do_request()
     m_file_address = (char *)mmap(0, m_file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
     return FILE_REQUEST;
+}
+
+http_conn::HTTP_CODE http_conn::do_request()
+{
+    if (is_post)
+    {
+        return deal_post();
+    }
+    else
+    {
+        return deal_get();
+    }
 }
 
 void http_conn::unmap()
@@ -633,6 +723,36 @@ bool http_conn::process_write(HTTP_CODE ret)
         }
         break;
     }
+    case FAIL_REQUEST:
+    {
+        add_status_line(200, ok_200_title);
+        add_headers(strlen(fail));
+        if (!add_content(fail))
+        {
+            return false;
+        }
+        break;
+    }
+    case SUCCESS_REQUEST:
+    {
+        add_status_line(200, ok_200_title);
+        add_headers(strlen(success));
+        if (!add_content(success))
+        {
+            return false;
+        }
+        break;
+    }
+    case TEXT_REQUEST:
+    {
+        add_status_line(200, ok_200_title);
+        add_headers(strlen(to_send.c_str()));
+        if (!add_content(to_send.c_str()))
+        {
+            return false;
+        }
+        break;
+    }
     case FILE_REQUEST:
     {
         add_status_line(200, ok_200_title);
@@ -686,7 +806,7 @@ void http_conn::process()
     modfd(m_epollfd, m_sockfd, EPOLLOUT, conn_is_LT);
 }
 
-void http_conn::init_mysql_result(connectionPool *connPool)
+void http_conn::init_mysql_result()
 {
     //先从连接池中取一个连接
     MYSQL *mysql = connPool->getConnection();
@@ -705,7 +825,7 @@ void http_conn::init_mysql_result(connectionPool *connPool)
 
     //返回所有字段结构的数组
     MYSQL_FIELD *fields = mysql_fetch_fields(result);
-
+    users.clear();
     //从结果集中获取下一行，将对应的用户名和密码，存入map中
     while (MYSQL_ROW row = mysql_fetch_row(result))
     {
