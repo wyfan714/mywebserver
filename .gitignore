@@ -36,3 +36,5 @@ webserver
 .vscode
 memo.cpp
 *.swp
+*/websocket
+*/main
