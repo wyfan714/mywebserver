@@ -3,7 +3,7 @@ class AboutMe {
         this.root = root;
         this.$menu = $(`
 <div class="welcome-menu">
-        <div align="center" class="aboutme_field">
+        <div align="center" class="aboutme_field" >
         我叫王一帆，就读于吉林大学计算机科学与技术学院，目前是研二，本科就读于吉林大学软件学院，家乡是广东韶关，
         对C++、Linux、网络编程、数据库等方面有一定的基础，对计算机基础也有一定的掌握，例如计算机网络和数据结构等。
         平时喜欢看动漫，玩游戏~
@@ -319,7 +319,7 @@ class Choose {
     </div>
 </div>
         `);
-        //this.$menu.show();
+        this.$menu.hide();
         this.root.$welcome.append(this.$menu);
         this.$about_me = this.$menu.find('.about-me');
         this.$database = this.$menu.find('.database');
@@ -1214,6 +1214,7 @@ class ScoreBoard extends GameObject {
         let $canvas = this.playground.game_map.$canvas;
         $canvas.on('click', function () {
             outer.playground.hide();
+            //outer.playground.mps.ws.onclose = function(){};
             outer.playground.root.game.show();
         });
     }
